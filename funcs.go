@@ -1,10 +1,10 @@
 package wordschecker
 
 import (
-	"os"
-	"log"
 	"bufio"
 	"io"
+	"log"
+	"os"
 	"strings"
 )
 
@@ -57,21 +57,10 @@ func ReloadDicts() {
 			continue
 		}
 		line = strings.TrimSpace(line)
-		/*
-		// 以;开头的行表示注释，直接忽略
-		if strings.HasPrefix(line, ";") {
-			continue
-		}
-		// 以#rule#:开头的表示规则，添加到规则字典列表
-		if strings.HasPrefix(line, RulePrefix) {
-			ruleDictionary.Add(line[len(RulePrefix):])
-			continue
-		}
-		// 添加关键词
-		dictionary.AddKeyword(line)
-		*/
 		di := NewDictItem(line)
-		AddDictItem(di)
+		if di != nil {
+			AddDictItem(di)
+		}
 	}
 }
 

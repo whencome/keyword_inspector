@@ -7,58 +7,50 @@ import (
 
 // 评估对象
 type Evaluator struct {
-	// 开启增强检查(将中文转换成英文进行检查)
-	EnableExtraCheck		bool
 }
 
 type evaluateScore struct {
-	Score 			int
-	Words			[]rune
-	IsExtraCheck	bool
-	Info 			string
+	Score int
+	Words []rune
+	Info  string
 }
 
 type MatchWord struct {
-	Keyword 		string
-	Score 			int
-	Count 			int
-	ExtraScore		int
-	ExtraCount		int
+	Keyword string
+	Score   int
+	Count   int
 }
 
-// 评估结果
+// EvaluateResult 评估结果
 type EvaluateResult struct {
-	Score 			int
-	Words			map[string]*MatchWord
-	evalChan		chan *evaluateScore
-	stopChan		chan struct{}
+	Score    int
+	Words    map[string]*MatchWord
+	evalChan chan *evaluateScore
+	stopChan chan struct{}
 }
 
-func NewMatchWord(word string) *MatchWord{
+func newMatchWord(word string) *MatchWord {
 	return &MatchWord{
-		Keyword		: word,
-		Score		: 0,
-		Count		: 0,
-		ExtraScore	: 0,
-		ExtraCount	: 0,
+		Keyword: word,
+		Score:   0,
+		Count:   0,
 	}
 }
 
-func NewEvaluateResult() *EvaluateResult {
+func newEvaluateResult() *EvaluateResult {
 	return &EvaluateResult{
-		Score 		: 0,
-		Words 		: make(map[string]*MatchWord),
-		evalChan	: make(chan *evaluateScore),
-		stopChan  	: make(chan struct{}),
+		Score:    0,
+		Words:    make(map[string]*MatchWord),
+		evalChan: make(chan *evaluateScore),
+		stopChan: make(chan struct{}),
 	}
 }
 
-func newEvaluateScore(isExtraCheck bool) *evaluateScore {
+func newEvaluateScore() *evaluateScore {
 	return &evaluateScore{
-		Score		 : 0,
-		Words		 : make([]rune, 0),
-		IsExtraCheck : isExtraCheck,
-		Info : "",
+		Score: 0,
+		Words: make([]rune, 0),
+		Info:  "",
 	}
 }
 
@@ -75,15 +67,14 @@ func (es *evaluateScore) AddWord(word rune) {
 	es.Words = append(es.Words, word)
 }
 
-
-func NewEvaluator(extraCheck bool) *Evaluator {
-	return &Evaluator{
-		EnableExtraCheck : extraCheck,
-	}
+// NewEvaluator 创建一个新的Evaluator对象
+func NewEvaluator() *Evaluator {
+	return &Evaluator{}
 }
 
+// Evaluate 对输入语句进行评估检测
 func (e *Evaluator) Evaluate(sentence string) *EvaluateResult {
-	evalResult := NewEvaluateResult()
+	evalResult := newEvaluateResult()
 	sentence = strings.TrimSpace(sentence)
 	words := []rune(sentence)
 	if len(words) == 0 {
@@ -91,7 +82,7 @@ func (e *Evaluator) Evaluate(sentence string) *EvaluateResult {
 	}
 
 	// 计算结果
-	go func(){
+	go func() {
 		for {
 			select {
 			case es := <-evalResult.evalChan:
@@ -99,16 +90,13 @@ func (e *Evaluator) Evaluate(sentence string) *EvaluateResult {
 					evalResult.Score += es.Score
 					keyword := string(es.Words)
 					if _, ok := evalResult.Words[keyword]; !ok {
-						evalResult.Words[keyword] = NewMatchWord(keyword)
+						evalResult.Words[keyword] = newMatchWord(keyword)
 					}
 					evalResult.Words[keyword].Score += es.Score
-					evalResult.Words[keyword].Count += 1
-					if es.IsExtraCheck {
-						evalResult.Words[keyword].ExtraScore += es.Score
-						evalResult.Words[keyword].ExtraCount += 1
-					}
+					evalResult.Words[keyword].Count++
 				}
 			case <-evalResult.stopChan:
+				close(evalResult.evalChan)
 				return
 			}
 		}
@@ -118,13 +106,13 @@ func (e *Evaluator) Evaluate(sentence string) *EvaluateResult {
 	var wg sync.WaitGroup
 	wg.Add(2)
 	// 检查关键词
-	go func(){
-		evalKeyword(evalResult.evalChan, words, false)
+	go func() {
+		evalKeyword(evalResult.evalChan, words)
 		wg.Done()
 	}()
 	// 规则检查
-	go func(){
-		evalRules(evalResult.evalChan, sentence, false)
+	go func() {
+		evalRules(evalResult.evalChan, sentence)
 		wg.Done()
 	}()
 	// 等待结束
@@ -136,7 +124,7 @@ func (e *Evaluator) Evaluate(sentence string) *EvaluateResult {
 }
 
 // 关键词匹配
-func evalKeyword(scoreChan chan *evaluateScore, words []rune, isExtraCheck bool) {
+func evalKeyword(scoreChan chan *evaluateScore, words []rune) {
 	var innerWg sync.WaitGroup
 	var checkerPool = make(chan struct{}, 5)
 	for pos, word := range words {
@@ -147,9 +135,9 @@ func evalKeyword(scoreChan chan *evaluateScore, words []rune, isExtraCheck bool)
 			continue
 		}
 		// 关键词检查
-		checkerPool<-struct{}{}
+		checkerPool <- struct{}{}
 		go func(dict *Dict, word rune, chars []rune) {
-			evalScore := newEvaluateScore(isExtraCheck)
+			evalScore := newEvaluateScore()
 			evalScore.AddWord(word)
 			for _, char := range chars {
 				newDict := dict.Find(char)
@@ -171,7 +159,7 @@ func evalKeyword(scoreChan chan *evaluateScore, words []rune, isExtraCheck bool)
 }
 
 // 规则匹配
-func evalRules(scoreChan chan *evaluateScore, words string, isExtraCheck bool) {
+func evalRules(scoreChan chan *evaluateScore, words string) {
 	if ruleDictionary.Size() == 0 {
 		return
 	}
@@ -181,9 +169,7 @@ func evalRules(scoreChan chan *evaluateScore, words string, isExtraCheck bool) {
 		if matches == nil {
 			continue
 		}
-		evalScore := newEvaluateScore(isExtraCheck)
-		// 第一个匹配的是匹配内容本身，所以从第二个（下标1）开始取值
-		// 暂时只返回第一个内容
+		evalScore := newEvaluateScore()
 		matchPart := string(matches[0])
 		evalScore.SetWords([]rune(matchPart))
 		evalScore.SetScore(regRule.Weight)

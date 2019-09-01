@@ -1,51 +1,51 @@
 package wordschecker
 
 import (
-	"strings"
 	"regexp"
 	"strconv"
+	"strings"
 )
 
 // 普通关键词字典
 type Dict struct {
-	Depth		int
-	Weight 		int 	// 权重
-	Keyword		map[rune]*Dict
+	Depth   int
+	Weight  int // 权重
+	Keyword map[rune]*Dict
 }
 
 // 正则表达式规则词典
 type RuleDict struct {
-	Rules 		[]*RuleItem
+	Rules []*RuleItem
 }
 
 type RuleItem struct {
-	Weight 			int 	// 权重
-	Rule 			string
-	Pattern 		*regexp.Regexp
+	Weight  int // 权重
+	Rule    string
+	Pattern *regexp.Regexp
 }
 
 // 定义字典条目
 type DictItem struct {
-	OriginText 		string   	// 原始输入项目
-	Keyword 		string 		// 字典内容
-	Weight 			int 		// 权重信息
-	IsNote			bool		// 是否是注释内容，注释内容不进入字典列表
-	IsRule			bool 		// 是否是规则词条，规则词条进入RuleDict，使用正则匹配
+	OriginText string // 原始输入项目
+	Keyword    string // 字典内容
+	Weight     int    // 权重信息
+	IsNote     bool   // 是否是注释内容，注释内容不进入字典列表
+	IsRule     bool   // 是否是规则词条，规则词条进入RuleDict，使用正则匹配
 }
 
 // 创建普通词典
 func NewDict(depth int) *Dict {
 	return &Dict{
-		Depth : depth,
-		Weight : 1,
-		Keyword : make(map[rune]*Dict),
+		Depth:   depth,
+		Weight:  1,
+		Keyword: make(map[rune]*Dict),
 	}
 }
 
 // 创建正则词典
 func NewRuleDict() *RuleDict {
 	return &RuleDict{
-		Rules : make([]*RuleItem, 0),
+		Rules: make([]*RuleItem, 0),
 	}
 }
 
@@ -63,7 +63,7 @@ func (dict *Dict) Add(word []rune, weight int) {
 		}
 		newDict.Keyword[char].Add(word[pos+1:], weight)
 		newDict = newDict.Keyword[char]
-		if pos + 1 == size {
+		if pos+1 == size {
 			newDict.Weight = weight
 			break
 		}
@@ -106,20 +106,21 @@ func (rd *RuleDict) Size() int {
 // 创建一个RuleItem
 func NewRuleItem(rule string, pattern *regexp.Regexp, weight int) *RuleItem {
 	return &RuleItem{
-		Weight 	: weight,
-		Rule 	: rule,
-		Pattern	: pattern,
+		Weight:  weight,
+		Rule:    rule,
+		Pattern: pattern,
 	}
 }
 
 // 创建一个DictItem
 func NewDictItem(text string) *DictItem {
-	di := &DictItem{
-		OriginText : strings.TrimSpace(text),
-	}
+	text = strings.TrimSpace(text)
 	// 解析内容
-	if di.OriginText == "" {
-		return di
+	if text == "" {
+		return nil
+	}
+	di := &DictItem{
+		OriginText: text,
 	}
 	// 以;开头的行表示注释，直接忽略
 	if strings.HasPrefix(di.OriginText, ";") {
@@ -142,7 +143,7 @@ func NewDictItem(text string) *DictItem {
 		parts := strings.Split(di.OriginText, "=>")
 		if len(parts) >= 2 {
 			keyword = strings.TrimSpace(parts[0])
-			weightStr := parts[len(parts)-1]
+			weightStr := strings.TrimSpace(parts[len(parts)-1])
 			w, err := strconv.Atoi(weightStr)
 			if err == nil && w > 0 {
 				weight = w
